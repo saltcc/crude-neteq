@@ -59,7 +59,7 @@ class DelayManager {
   // Notifies the DelayManager of how much audio data is carried in each packet.
   // The method updates the DelayPeakDetector too, and resets the inter-arrival
   // time counter. Returns 0 on success, -1 on failure.
-  virtual int SetPacketAudioLength(int length_ms);
+  //virtual int SetPacketAudioLength(int length_ms);
 
   // Resets the DelayManager and the associated DelayPeakDetector.
   virtual void Reset();

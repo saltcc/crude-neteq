@@ -29,7 +29,7 @@ class DelayPeakDetector {
 
   // Notifies the DelayPeakDetector of how much audio data is carried in each
   // packet.
-  virtual void SetPacketAudioLength(int length_ms);
+  //virtual void SetPacketAudioLength(int length_ms);
 
   // Returns true if peak-mode is active. That is, delay peaks were observed
   // recently.

@@ -35,7 +35,7 @@ dylib: $(DYLIBS)
 #$(APP): test.cc $(DSPLIB) $(BASELIB)
 #	$(CXX) $< -o $@ -I. -L. -lsignal_processing -lrtc_base
 
-$(APP): test_plc.cc $(DSPLIB) $(VADLIB) $(BASELIB)
+$(APP): test_neteq.cc $(DSPLIB) $(VADLIB) $(BASELIB)
 	$(CXX) $< -o $@ -I. -L. -Lneteq -lplc -lwebrtc_vad -lbase -lsignal_processing -g -lpthread
 
 $(APP_ACCE): test_accelerate.cc $(DSPLIB) $(VADLIB) $(BASELIB)
