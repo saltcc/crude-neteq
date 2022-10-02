@@ -16,6 +16,7 @@
 #include "neteq/preemptive_expand.h"
 #include "neteq/delay_peak_detector.h"
 #include "neteq/delay_manager.h"
+#include "neteq/packet_buffer.h"
 
 #define kMode_Normal 0
 #define kMode_Expand 1
@@ -26,6 +27,7 @@ static const int kInputSizeMs = 50;
 static const int kOutputSizeMs = 30;
 static const size_t kMaxFrameSize = 5760;  // 120 ms @ 48 kHz.
 static const size_t kSyncBufferSize = kMaxFrameSize + 60 * 48;
+static const size_t kMaxPacketsInBuffer = 100;
 
 RandomVector random_vector_;
 std::unique_ptr<PostDecodeVad> vad_;
@@ -44,6 +46,7 @@ std::unique_ptr<DelayManager> delay_manager_;
 std::unique_ptr<DelayPeakDetector> delay_peak_detector_;
 std::unique_ptr<BufferLevelFilter> buffer_level_filter_;
 
+std::unique_ptr<PacketBuffer> packet_buffer_;
 std::unique_ptr<int16_t[]> decoded_buffer_;
 size_t decoded_buffer_length_ = kMaxFrameSize;
 std::unique_ptr<AudioMultiVector> algorithm_buffer_;
@@ -91,9 +94,11 @@ void init_eq()
 
     tick_timer_.reset(new TickTimer);
     delay_peak_detector_.reset(new DelayPeakDetector(tick_timer_.get()));
-    delay_manager_.reset(new DelayManager(100, delay_peak_detector_.get(), tick_timer_.get()));
+    delay_manager_.reset(new DelayManager(kMaxPacketsInBuffer, delay_peak_detector_.get(), tick_timer_.get()));
 
     buffer_level_filter_.reset(new BufferLevelFilter);
+
+	packet_buffer_.reset(new PacketBuffer(kMaxPacketsInBuffer));
     decoded_buffer_.reset(new int16_t[decoded_buffer_length_]);
     // Delete algorithm buffer and create a new one.
     algorithm_buffer_.reset(new AudioMultiVector(channels));
