@@ -23,8 +23,7 @@
 #define kMode_Merge  2
 using namespace webrtc;
 
-static const int kInputSizeMs = 50;
-static const int kOutputSizeMs = 30;
+static const int kOutputSizeMs = 10;
 static const size_t kMaxFrameSize = 5760;  // 120 ms @ 48 kHz.
 static const size_t kSyncBufferSize = kMaxFrameSize + 60 * 48;
 static const size_t kMaxPacketsInBuffer = 100;
@@ -60,7 +59,6 @@ int fs_hz_ = 48000;
 size_t channels = 1;
 int fs_mult_ = fs_hz_ / 8000;
 int samples_10ms = static_cast<size_t>(10 * 8 * fs_mult_);
-int input_size_samples_ = static_cast<size_t>(kInputSizeMs * 8 * fs_mult_);
 int output_size_samples_ = static_cast<size_t>(kOutputSizeMs * 8 * fs_mult_);
 int decoder_frame_length_ = 3 * output_size_samples_;
 Modes last_mode_ = kModeNormal;
@@ -70,7 +68,6 @@ void init_param(){
     channels = 1;
     fs_mult_ = fs_hz_ / 8000;
     samples_10ms = static_cast<size_t>(10 * 8 * fs_mult_);
-    input_size_samples_ = static_cast<size_t>(kInputSizeMs * 8 * fs_mult_);
     output_size_samples_ = static_cast<size_t>(kOutputSizeMs * 8 * fs_mult_);
     decoder_frame_length_ = 3 * output_size_samples_;
     last_mode_ = kModeNormal;
@@ -162,6 +159,7 @@ int InsertPacket(const RTPHeader& rtp_header,
     packet.payload_type = rtp_header.payloadType;
     packet.sequence_number = rtp_header.sequenceNumber;
     packet.timestamp = rtp_header.timestamp;
+    packet.payload.SetData(payload.data(), payload.size());
 
     // Store these for later use, since the first packet may very well disappear
     // before we need these values.
@@ -178,6 +176,9 @@ int InsertPacket(const RTPHeader& rtp_header,
         sync_buffer_->IncreaseEndTimestamp(main_timestamp - timestamp_);
 
         timestamp_ = main_timestamp;
+        // const size_t packet_length_samples = 1 * decoder_frame_length_;
+        // delay_manager_->SetPacketAudioLength(
+        //     rtc::dchecked_cast<int>((1000 * packet_length_samples) / fs_hz_));
     }
 
     const int ret = packet_buffer_->InsertPacket(std::move(packet));
@@ -216,6 +217,39 @@ int InsertPacket(const RTPHeader& rtp_header,
 int main(){
 
     init_eq();
+
+    const size_t kPayloadLength = 100;
+    const uint8_t kPayloadType = 0;
+    const uint16_t kFirstSequenceNumber = 0x1234;
+    const uint32_t kFirstTimestamp = 0x12345678;
+    const uint32_t kFirstReceiveTime = 17;
+    uint8_t payload[kPayloadLength] = {0};
+
+    RTPHeader rtp_header;
+    rtp_header.payloadType = kPayloadType;
+    rtp_header.sequenceNumber = kFirstSequenceNumber;
+    rtp_header.timestamp = kFirstTimestamp;
+
+    InsertPacket(rtp_header, payload, kFirstReceiveTime);
+    
+    for (int i = 1; i < 10000; ++i){
+        tick_timer_->Increment();
+
+        if (i % 5 == 0)
+        {
+            rtp_header.timestamp += 480;
+            rtp_header.sequenceNumber += 1;
+            InsertPacket(rtp_header, payload, kFirstReceiveTime);
+        }
+        if (i % 3 == 0)
+        {
+            rtp_header.timestamp += 480;
+            rtp_header.sequenceNumber += 1;
+            InsertPacket(rtp_header, payload, kFirstReceiveTime);
+        }
+    }
+    delay_manager_->ShowHistogram();
+    printf("target level:%d\n",delay_manager_->TargetLevel()>>8);
 
     return 0;
 }

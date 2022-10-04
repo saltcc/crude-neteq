@@ -113,7 +113,7 @@ class DelayManager {
   virtual void set_streaming_mode(bool value);
   virtual int last_pack_cng_or_dtmf() const;
   virtual void set_last_pack_cng_or_dtmf(int value);
-
+  void ShowHistogram();
  private:
   static const int kLimitProbability = 53687091;         // 1/20 in Q30.
   static const int kLimitProbabilityStreaming = 536871;  // 1/2000 in Q30.

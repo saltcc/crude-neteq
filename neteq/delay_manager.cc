@@ -73,6 +73,14 @@ void DelayManager::ResetHistogram() {
   target_level_ = base_target_level_ << 8;
 }
 
+void DelayManager::ShowHistogram(){
+    IATVector::iterator it = iat_vector_.begin();
+    for (; it < iat_vector_.end(); it++) {
+        printf("%d,",*it);
+    }
+    printf("\n");
+}
+
 int DelayManager::Update(uint16_t sequence_number,
                          uint32_t timestamp,
                          int sample_rate_hz) {
