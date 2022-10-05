@@ -53,7 +53,7 @@ std::unique_ptr<SyncBuffer> sync_buffer_;
 
 bool first_packet_ = true;
 uint32_t timestamp_ = 0;
-uint32_t playout_timestamp_;
+uint32_t playout_timestamp_ = 0;
 
 int fs_hz_ = 48000;
 size_t channels = 1;
@@ -62,6 +62,9 @@ int samples_10ms = static_cast<size_t>(10 * 8 * fs_mult_);
 int output_size_samples_ = static_cast<size_t>(kOutputSizeMs * 8 * fs_mult_);
 int decoder_frame_length_ = 3 * output_size_samples_;
 Modes last_mode_ = kModeNormal;
+
+const bool enable_muted_state_ = true;
+const bool new_codec_ = false;
 
 void init_param(){
     fs_hz_ = 48000;
@@ -213,7 +216,191 @@ int InsertPacket(const RTPHeader& rtp_header,
 
     return 0;
 }
+/*
+int GetDecision(Operations* operation, PacketList* packet_list) 
+{
+    uint32_t end_timestamp = sync_buffer_->end_timestamp();
+    if (!new_codec_) {
+        const uint32_t five_seconds_samples = 5 * fs_hz_;
+        packet_buffer_->DiscardOldPackets(end_timestamp, five_seconds_samples);
+    }
 
+    const Packet* packet = packet_buffer_->PeekNextPacket();
+
+    const int samples_left = static_cast<int>(sync_buffer_->FutureLength() -
+                                                expand_->overlap_length());
+    if (last_mode_ == kModeAccelerateSuccess ||
+        last_mode_ == kModeAccelerateLowEnergy ||
+        last_mode_ == kModePreemptiveExpandSuccess ||
+        last_mode_ == kModePreemptiveExpandLowEnergy) {
+        // Subtract (samples_left + output_size_samples_) from sampleMemory.
+        // decision_logic_->AddSampleMemory(
+        //     -(samples_left + rtc::dchecked_cast<int>(output_size_samples_)));
+    }
+
+    // *operation = decision_logic_->GetDecision(
+    //     *sync_buffer_, *expand_, decoder_frame_length_, packet, last_mode_,
+    //     *play_dtmf, generated_noise_samples, &reset_decoder_);
+
+    // Check if we already have enough samples in the |sync_buffer_|. If so,
+    // change decision to normal, unless the decision was merge, accelerate, or
+    // preemptive expand.
+    if (samples_left >= rtc::dchecked_cast<int>(output_size_samples_) &&
+        *operation != kMerge && *operation != kAccelerate &&
+        *operation != kFastAccelerate && *operation != kPreemptiveExpand) {
+        *operation = kNormal;
+        return 0;
+    }
+
+    // decision_logic_->ExpandDecision(*operation);
+
+    // Check conditions for reset.
+    if (new_codec_ || *operation == kUndefined) {
+        // The only valid reason to get kUndefined is that new_codec_ is set.
+        assert(new_codec_);
+
+        timestamp_ = packet->timestamp;
+        *operation = kNormal;
+
+        // Adjust |sync_buffer_| timestamp before setting |end_timestamp| to the
+        // new value.
+        sync_buffer_->IncreaseEndTimestamp(timestamp_ - end_timestamp);
+        end_timestamp = timestamp_;
+        new_codec_ = false;
+        // decision_logic_->SoftReset();
+        buffer_level_filter_->Reset();
+        delay_manager_->Reset();
+    }
+
+    size_t required_samples = output_size_samples_;
+    const size_t samples_10_ms = static_cast<size_t>(80 * fs_mult_);
+    const size_t samples_20_ms = 2 * samples_10_ms;
+    const size_t samples_30_ms = 3 * samples_10_ms;
+
+    switch (*operation) {
+        case kExpand: {
+            timestamp_ = end_timestamp;
+            return 0;
+        }
+        case kRfc3389CngNoPacket:
+        case kCodecInternalCng: {
+            return 0;
+        }
+        case kDtmf: {
+            return 0;
+        }
+        case kAccelerate:
+        case kFastAccelerate: {
+            // In order to do an accelerate we need at least 30 ms of audio data.
+            if (samples_left >= static_cast<int>(samples_30_ms)) {
+                // Already have enough data, so we do not need to extract any more.
+                decision_logic_->set_sample_memory(samples_left);
+                decision_logic_->set_prev_time_scale(true);
+                return 0;
+            } else if (samples_left >= static_cast<int>(samples_10_ms) &&
+                        decoder_frame_length_ >= samples_30_ms) {
+                // Avoid decoding more data as it might overflow the playout buffer.
+                *operation = kNormal;
+                return 0;
+            } else if (samples_left < static_cast<int>(samples_20_ms) &&
+                        decoder_frame_length_ < samples_30_ms) {
+                // Build up decoded data by decoding at least 20 ms of audio data. Do
+                // not perform accelerate yet, but wait until we only need to do one
+                // decoding.
+                required_samples = 2 * output_size_samples_;
+                *operation = kNormal;
+            }
+            // If none of the above is true, we have one of two possible situations:
+            // (1) 20 ms <= samples_left < 30 ms and decoder_frame_length_ < 30 ms; or
+            // (2) samples_left < 10 ms and decoder_frame_length_ >= 30 ms.
+            // In either case, we move on with the accelerate decision, and decode one
+            // frame now.
+            break;
+        }
+        case kPreemptiveExpand: {
+            // In order to do a preemptive expand we need at least 30 ms of decoded
+            // audio data.
+            if ((samples_left >= static_cast<int>(samples_30_ms)) ||
+                (samples_left >= static_cast<int>(samples_10_ms) &&
+                decoder_frame_length_ >= samples_30_ms)) {
+                // Already have enough data, so we do not need to extract any more.
+                // Or, avoid decoding more data as it might overflow the playout buffer.
+                // Still try preemptive expand, though.
+                decision_logic_->set_sample_memory(samples_left);
+                decision_logic_->set_prev_time_scale(true);
+                return 0;
+            }
+            if (samples_left < static_cast<int>(samples_20_ms) &&
+                decoder_frame_length_ < samples_30_ms) {
+                // Build up decoded data by decoding at least 20 ms of audio data.
+                // Still try to perform preemptive expand.
+                required_samples = 2 * output_size_samples_;
+            }
+            // Move on with the preemptive expand decision.
+            break;
+        }
+        case kMerge: {
+            required_samples =
+                std::max(merge_->RequiredFutureSamples(), required_samples);
+            break;
+        }
+        default: {
+        }
+    }
+
+    // Get packets from buffer.
+    int extracted_samples = 0;
+    if (packet) {
+        sync_buffer_->IncreaseEndTimestamp(packet->timestamp - end_timestamp);
+
+        extracted_samples = ExtractPackets(required_samples, packet_list);
+        if (extracted_samples < 0) {
+            return kPacketBufferCorruption;
+        }
+    }
+
+    if (*operation == kAccelerate || *operation == kFastAccelerate ||
+        *operation == kPreemptiveExpand) {
+        decision_logic_->set_sample_memory(samples_left + extracted_samples);
+        decision_logic_->set_prev_time_scale(true);
+    }
+
+    if (*operation == kAccelerate || *operation == kFastAccelerate) {
+        // Check that we have enough data (30ms) to do accelerate.
+        if (extracted_samples + samples_left < static_cast<int>(samples_30_ms)) {
+            // TODO(hlundin): Write test for this.
+            // Not enough, do normal operation instead.
+            *operation = kNormal;
+        }
+    }
+
+    timestamp_ = end_timestamp;
+}
+
+
+int GetAudioInternal(AudioFrame* audio_frame, bool* muted)
+{
+    tick_timer_->Increment();
+
+    if (enable_muted_state_ && expand_->Muted() && packet_buffer_->Empty()) {
+        RTC_DCHECK_EQ(last_mode_, kModeExpand);
+        audio_frame->Reset();
+        RTC_DCHECK(audio_frame->muted());  // Reset() should mute the frame.
+        playout_timestamp_ += static_cast<uint32_t>(output_size_samples_);
+        audio_frame->sample_rate_hz_ = fs_hz_;
+        audio_frame->samples_per_channel_ = output_size_samples_;
+        audio_frame->timestamp_ =
+            first_packet_
+                ? 0
+                : (playout_timestamp_) - static_cast<uint32_t>(audio_frame->samples_per_channel_);
+        audio_frame->num_channels_ = sync_buffer_->Channels();
+        *muted = true;
+        return 0;
+    }
+
+    return 0;
+}
+*/
 int main(){
 
     init_eq();

@@ -119,10 +119,10 @@ class PacketBuffer {
   // redundant packets.
   virtual size_t NumPacketsInBuffer() const;
 
-//  // Returns the number of samples in the buffer, including samples carried in
-//  // duplicate and redundant packets.
-//  virtual size_t NumSamplesInBuffer(size_t last_decoded_length) const;
-//
+  // Returns the number of samples in the buffer, including samples carried in
+  // duplicate and redundant packets.
+  virtual size_t NumSamplesInBuffer(size_t last_decoded_length) const;
+
 //  // Returns true if the packet buffer contains any DTX or CNG packets.
 //  virtual bool ContainsDtxOrCngPacket(
 //      const DecoderDatabase* decoder_database) const;

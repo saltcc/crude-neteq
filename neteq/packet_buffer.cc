@@ -261,25 +261,25 @@ size_t PacketBuffer::NumPacketsInBuffer() const {
   return buffer_.size();
 }
 
-//size_t PacketBuffer::NumSamplesInBuffer(size_t last_decoded_length) const {
-//  size_t num_samples = 0;
-//  size_t last_duration = last_decoded_length;
-//  for (const Packet& packet : buffer_) {
-//    if (packet.frame) {
-//      // TODO(hlundin): Verify that it's fine to count all packets and remove
-//      // this check.
-//      if (packet.priority != Packet::Priority(0, 0)) {
-//        continue;
-//      }
-//      size_t duration = packet.frame->Duration();
-//      if (duration > 0) {
-//        last_duration = duration;  // Save the most up-to-date (valid) duration.
-//      }
-//    }
-//    num_samples += last_duration;
-//  }
-//  return num_samples;
-//}
+size_t PacketBuffer::NumSamplesInBuffer(size_t last_decoded_length) const {
+  size_t num_samples = 0;
+  size_t last_duration = last_decoded_length;
+  for (const Packet& packet : buffer_) {
+    //if (packet.frame) {
+    //  // TODO(hlundin): Verify that it's fine to count all packets and remove
+    //  // this check.
+    //  if (packet.priority != Packet::Priority(0, 0)) {
+    //    continue;
+    //  }
+    //  size_t duration = packet.frame->Duration();
+    //  if (duration > 0) {
+    //    last_duration = duration;  // Save the most up-to-date (valid) duration.
+    //  }
+    //}
+    num_samples += last_duration;
+  }
+  return num_samples;
+}
 
 //bool PacketBuffer::ContainsDtxOrCngPacket(
 //    const DecoderDatabase* decoder_database) const {
