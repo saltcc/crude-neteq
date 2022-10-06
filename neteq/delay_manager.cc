@@ -44,9 +44,8 @@ DelayManager::DelayManager(size_t max_packets_in_buffer,
       iat_cumulative_sum_(0),
       max_iat_cumulative_sum_(0),
       peak_detector_(*peak_detector),
-      last_pack_cng_or_dtmf_(1)/*,
-      frame_length_change_experiment_(
-          field_trial::IsEnabled("WebRTC-Audio-NetEqFramelengthExperiment")) */{
+      last_pack_cng_or_dtmf_(1),
+      frame_length_change_experiment_(false) {
   assert(peak_detector);  // Should never be NULL.
   Reset();
 }
@@ -303,21 +302,21 @@ int DelayManager::CalculateTargetLevel(int iat_packets) {
   return target_level_;
 }
 
-//int DelayManager::SetPacketAudioLength(int length_ms) {
-//  if (length_ms <= 0) {
-//    //RTC_LOG_F(LS_ERROR) << "length_ms = " << length_ms;
-//    return -1;
-//  }
-//  if (frame_length_change_experiment_ && packet_len_ms_ != length_ms) {
-//    iat_vector_ = ScaleHistogram(iat_vector_, packet_len_ms_, length_ms);
-//  }
-//
-//  packet_len_ms_ = length_ms;
-//  peak_detector_.SetPacketAudioLength(packet_len_ms_);
-//  packet_iat_stopwatch_ = tick_timer_->GetNewStopwatch();
-//  last_pack_cng_or_dtmf_ = 1;  // TODO(hlundin): Legacy. Remove?
-//  return 0;
-//}
+int DelayManager::SetPacketAudioLength(int length_ms) {
+  if (length_ms <= 0) {
+    //RTC_LOG_F(LS_ERROR) << "length_ms = " << length_ms;
+    return -1;
+  }
+  if (frame_length_change_experiment_ && packet_len_ms_ != length_ms) {
+    iat_vector_ = ScaleHistogram(iat_vector_, packet_len_ms_, length_ms);
+  }
+
+  packet_len_ms_ = length_ms;
+  peak_detector_.SetPacketAudioLength(packet_len_ms_);
+  packet_iat_stopwatch_ = tick_timer_->GetNewStopwatch();
+  last_pack_cng_or_dtmf_ = 1;  // TODO(hlundin): Legacy. Remove?
+  return 0;
+}
 
 void DelayManager::Reset() {
   packet_len_ms_ = 0;  // Packet size unknown.

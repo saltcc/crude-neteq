@@ -29,7 +29,7 @@ class DelayPeakDetector {
 
   // Notifies the DelayPeakDetector of how much audio data is carried in each
   // packet.
-  //virtual void SetPacketAudioLength(int length_ms);
+  virtual void SetPacketAudioLength(int length_ms);
 
   // Returns true if peak-mode is active. That is, delay peaks were observed
   // recently.
@@ -66,7 +66,7 @@ class DelayPeakDetector {
   int peak_detection_threshold_;
   const TickTimer* tick_timer_;
   std::unique_ptr<TickTimer::Stopwatch> peak_period_stopwatch_;
-  //const bool frame_length_change_experiment_;
+  const bool frame_length_change_experiment_;
 
   RTC_DISALLOW_COPY_AND_ASSIGN(DelayPeakDetector);
 };
