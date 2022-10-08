@@ -1,5 +1,5 @@
 CC = gcc
-CXX = g++ -std=c++17
+CXX = g++ -std=c++11
 CFLAGS = -fno-exceptions -fvisibility=hidden -DNDEBUG -DWEBRTC_POSIX -g
 #CFLAGS = -DNDEBUG -DWEBRTC_POSIX -g
 INC = -I.

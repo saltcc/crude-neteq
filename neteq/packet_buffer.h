@@ -16,7 +16,7 @@
 #include "neteq/packet.h"
 #include "neteq/module_common_types_public.h"
 #include "rtc_base/constructormagic.h"
-#include <optional>
+#include "neteq/optional.hpp"
 
 namespace webrtc {
 
@@ -91,7 +91,7 @@ class PacketBuffer {
   // Extracts the first packet in the buffer and returns it.
   // Returns an empty optional if the buffer is empty.
   //virtual absl::optional<Packet> GetNextPacket();
-  virtual std::optional<Packet> GetNextPacket();
+  virtual tl::optional<Packet> GetNextPacket();
 
   // Discards the first packet in the buffer. The packet is deleted.
   // Returns PacketBuffer::kBufferEmpty if the buffer is empty,

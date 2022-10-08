@@ -202,13 +202,13 @@ const Packet* PacketBuffer::PeekNextPacket() const {
   return buffer_.empty() ? nullptr : &buffer_.front();
 }
 
-std::optional<Packet> PacketBuffer::GetNextPacket() {
+tl::optional<Packet> PacketBuffer::GetNextPacket() {
   if (Empty()) {
     // Buffer is empty.
-    return std::nullopt;
+    return tl::nullopt;
   }
 
-  std::optional<Packet> packet(std::move(buffer_.front()));
+  tl::optional<Packet> packet(std::move(buffer_.front()));
   // Assert that the packet sanity checks in InsertPacket method works.
   RTC_DCHECK(!packet->empty());
   buffer_.pop_front();

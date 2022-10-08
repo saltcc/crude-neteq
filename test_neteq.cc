@@ -18,6 +18,7 @@
 #include "neteq/delay_manager.h"
 #include "neteq/packet_buffer.h"
 #include "neteq/decision_logic.h"
+#include "neteq/optional.hpp"
 
 #define kMode_Normal 0
 #define kMode_Expand 1
@@ -260,7 +261,7 @@ int ExtractPackets(size_t required_samples,
   // Packet extraction loop.
     do {
         timestamp_ = next_packet->timestamp;
-        std::optional<Packet> packet = packet_buffer_->GetNextPacket();
+        tl::optional<Packet> packet = packet_buffer_->GetNextPacket();
         // |next_packet| may be invalid after the |packet_buffer_| operation.
         next_packet = nullptr;
         if (!packet) {
@@ -312,7 +313,7 @@ int ExtractPackets(size_t required_samples,
         //stats_.JitterBufferDelay(extracted_samples, waiting_time_ms);
 
         packet_list->push_back(std::move(*packet));  // Store packet in list.
-        packet = std::nullopt;  // Ensure it's never used after the move.
+        packet = tl::nullopt;  // Ensure it's never used after the move.
 
         // Check what packet is available next.
         next_packet = packet_buffer_->PeekNextPacket();

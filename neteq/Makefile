@@ -1,6 +1,6 @@
 
 CC = gcc
-CXX = g++ -std=c++17
+CXX = g++ -std=c++11
 CFLAGS = -DNDEBUG -fno-exceptions -fvisibility=hidden -g
 INC = -I. -I../
 
