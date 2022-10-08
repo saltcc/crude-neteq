@@ -68,6 +68,7 @@ Modes last_mode_ = kModeNormal;
 Operations last_operation_;
 
 const bool enable_muted_state_ = true;
+const bool enable_fast_accelerate_ = true;
 bool new_codec_ = false;
 const bool no_time_stretching_ = true;
 bool reset_decoder_ = false;
@@ -514,6 +515,239 @@ int Decode(PacketList* packet_list,
     return decoder_frame_length_;
 }
 
+void DoNormal(const int16_t* decoded_buffer,
+                size_t decoded_length,
+                SpeechType speech_type,
+                bool play_dtmf) {
+    assert(normal_.get());
+    normal_->Process(decoded_buffer, decoded_length, last_mode_,
+                    algorithm_buffer_.get());
+    if (decoded_length != 0) {
+        last_mode_ = kModeNormal;
+    }
+
+//   // If last packet was decoded as an inband CNG, set mode to CNG instead.
+//   if ((speech_type == AudioDecoder::kComfortNoise) ||
+//       ((last_mode_ == kModeCodecInternalCng) && (decoded_length == 0))) {
+//     // TODO(hlundin): Remove second part of || statement above.
+//     last_mode_ = kModeCodecInternalCng;
+//   }
+
+//   if (!play_dtmf) {
+//     dtmf_tone_generator_->Reset();
+//   }
+}
+
+void DoMerge(int16_t* decoded_buffer,
+                size_t decoded_length,
+                SpeechType speech_type,
+                bool play_dtmf) {
+    assert(merge_.get());
+    size_t new_length =
+        merge_->Process(decoded_buffer, decoded_length, algorithm_buffer_.get());
+    // Correction can be negative.
+    int expand_length_correction =
+        rtc::dchecked_cast<int>(new_length) -
+        rtc::dchecked_cast<int>(decoded_length / algorithm_buffer_->Channels());
+
+    // // Update in-call and post-call statistics.
+    // if (expand_->MuteFactor(0) == 0) {
+    //     // Expand generates only noise.
+    //     stats_.ExpandedNoiseSamplesCorrection(expand_length_correction);
+    // } else {
+    //     // Expansion generates more than only noise.
+    //     stats_.ExpandedVoiceSamplesCorrection(expand_length_correction);
+    // }
+
+    last_mode_ = kModeMerge;
+    // // If last packet was decoded as an inband CNG, set mode to CNG instead.
+    // if (speech_type == AudioDecoder::kComfortNoise) {
+    //     last_mode_ = kModeCodecInternalCng;
+    // }
+    expand_->Reset();
+    // if (!play_dtmf) {
+    //     dtmf_tone_generator_->Reset();
+    // }
+}
+
+int DoExpand(bool play_dtmf) {
+
+    while ((sync_buffer_->FutureLength() - expand_->overlap_length()) <
+            output_size_samples_) {
+        algorithm_buffer_->Clear();
+        int return_value = expand_->Process(algorithm_buffer_.get());
+        // size_t length = algorithm_buffer_->Size();
+        // bool is_new_concealment_event = (last_mode_ != kModeExpand);
+
+        // // Update in-call and post-call statistics.
+        // if (expand_->MuteFactor(0) == 0) {
+        //     // Expand operation generates only noise.
+        //     stats_.ExpandedNoiseSamples(length, is_new_concealment_event);
+        // } else {
+        //     // Expand operation generates more than only noise.
+        //     stats_.ExpandedVoiceSamples(length, is_new_concealment_event);
+        // }
+
+        last_mode_ = kModeExpand;
+
+        if (return_value < 0) {
+            return return_value;
+        }
+
+        sync_buffer_->PushBack(*algorithm_buffer_);
+        algorithm_buffer_->Clear();
+    }
+    // if (!play_dtmf) {
+    //     dtmf_tone_generator_->Reset();
+    // }
+
+    // if (!generated_noise_stopwatch_) {
+    //     // Start a new stopwatch since we may be covering for a lost CNG packet.
+    //     generated_noise_stopwatch_ = tick_timer_->GetNewStopwatch();
+    // }
+
+  return 0;
+}
+
+int DoAccelerate(int16_t* decoded_buffer,
+                    size_t decoded_length,
+                    SpeechType speech_type,
+                    bool play_dtmf,
+                    bool fast_accelerate) {
+    const size_t required_samples =
+        static_cast<size_t>(240 * fs_mult_);  // Must have 30 ms.
+    size_t borrowed_samples_per_channel = 0;
+    size_t num_channels = algorithm_buffer_->Channels();
+    size_t decoded_length_per_channel = decoded_length / num_channels;
+    if (decoded_length_per_channel < required_samples) {
+        // Must move data from the |sync_buffer_| in order to get 30 ms.
+        borrowed_samples_per_channel =
+            static_cast<int>(required_samples - decoded_length_per_channel);
+        memmove(&decoded_buffer[borrowed_samples_per_channel * num_channels],
+                decoded_buffer, sizeof(int16_t) * decoded_length);
+        sync_buffer_->ReadInterleavedFromEnd(borrowed_samples_per_channel,
+                                            decoded_buffer);
+        decoded_length = required_samples * num_channels;
+    }
+
+    size_t samples_removed;
+    Accelerate::ReturnCodes return_code =
+        accelerate_->Process(decoded_buffer, decoded_length, fast_accelerate,
+                            algorithm_buffer_.get(), &samples_removed);
+    // stats_.AcceleratedSamples(samples_removed);
+    switch (return_code) {
+        case Accelerate::kSuccess:
+            last_mode_ = kModeAccelerateSuccess;
+            break;
+        case Accelerate::kSuccessLowEnergy:
+            last_mode_ = kModeAccelerateLowEnergy;
+            break;
+        case Accelerate::kNoStretch:
+            last_mode_ = kModeAccelerateFail;
+            break;
+        case Accelerate::kError:
+            // TODO(hlundin): Map to kModeError instead?
+            last_mode_ = kModeAccelerateFail;
+            return kAccelerateError;
+    }
+
+    if (borrowed_samples_per_channel > 0) {
+        // Copy borrowed samples back to the |sync_buffer_|.
+        size_t length = algorithm_buffer_->Size();
+        if (length < borrowed_samples_per_channel) {
+            // This destroys the beginning of the buffer, but will not cause any
+            // problems.
+            sync_buffer_->ReplaceAtIndex(
+                *algorithm_buffer_,
+                sync_buffer_->Size() - borrowed_samples_per_channel);
+            sync_buffer_->PushFrontZeros(borrowed_samples_per_channel - length);
+            algorithm_buffer_->PopFront(length);
+            assert(algorithm_buffer_->Empty());
+        } else {
+            sync_buffer_->ReplaceAtIndex(
+                *algorithm_buffer_, borrowed_samples_per_channel,
+                sync_buffer_->Size() - borrowed_samples_per_channel);
+            algorithm_buffer_->PopFront(borrowed_samples_per_channel);
+        }
+    }
+
+    // // If last packet was decoded as an inband CNG, set mode to CNG instead.
+    // if (speech_type == AudioDecoder::kComfortNoise) {
+    //     last_mode_ = kModeCodecInternalCng;
+    // }
+    // if (!play_dtmf) {
+    //     dtmf_tone_generator_->Reset();
+    // }
+    expand_->Reset();
+    return 0;
+}
+
+int DoPreemptiveExpand(int16_t* decoded_buffer,
+                        size_t decoded_length,
+                        SpeechType speech_type,
+                        bool play_dtmf) {
+    const size_t required_samples =
+        static_cast<size_t>(240 * fs_mult_);  // Must have 30 ms.
+    size_t num_channels = algorithm_buffer_->Channels();
+    size_t borrowed_samples_per_channel = 0;
+    size_t old_borrowed_samples_per_channel = 0;
+    size_t decoded_length_per_channel = decoded_length / num_channels;
+    if (decoded_length_per_channel < required_samples) {
+        // Must move data from the |sync_buffer_| in order to get 30 ms.
+        borrowed_samples_per_channel =
+            required_samples - decoded_length_per_channel;
+        // Calculate how many of these were already played out.
+        old_borrowed_samples_per_channel =
+            (borrowed_samples_per_channel > sync_buffer_->FutureLength())
+                ? (borrowed_samples_per_channel - sync_buffer_->FutureLength())
+                : 0;
+        memmove(&decoded_buffer[borrowed_samples_per_channel * num_channels],
+                decoded_buffer, sizeof(int16_t) * decoded_length);
+        sync_buffer_->ReadInterleavedFromEnd(borrowed_samples_per_channel,
+                                            decoded_buffer);
+        decoded_length = required_samples * num_channels;
+    }
+
+    size_t samples_added;
+    PreemptiveExpand::ReturnCodes return_code = preemptive_expand_->Process(
+        decoded_buffer, decoded_length, old_borrowed_samples_per_channel,
+        algorithm_buffer_.get(), &samples_added);
+    // stats_.PreemptiveExpandedSamples(samples_added);
+    switch (return_code) {
+        case PreemptiveExpand::kSuccess:
+            last_mode_ = kModePreemptiveExpandSuccess;
+            break;
+        case PreemptiveExpand::kSuccessLowEnergy:
+            last_mode_ = kModePreemptiveExpandLowEnergy;
+            break;
+        case PreemptiveExpand::kNoStretch:
+            last_mode_ = kModePreemptiveExpandFail;
+            break;
+        case PreemptiveExpand::kError:
+            // TODO(hlundin): Map to kModeError instead?
+            last_mode_ = kModePreemptiveExpandFail;
+            return kPreemptiveExpandError;
+    }
+
+    if (borrowed_samples_per_channel > 0) {
+        // Copy borrowed samples back to the |sync_buffer_|.
+        sync_buffer_->ReplaceAtIndex(
+            *algorithm_buffer_, borrowed_samples_per_channel,
+            sync_buffer_->Size() - borrowed_samples_per_channel);
+        algorithm_buffer_->PopFront(borrowed_samples_per_channel);
+    }
+
+    // // If last packet was decoded as an inband CNG, set mode to CNG instead.
+    // if (speech_type == AudioDecoder::kComfortNoise) {
+    //     last_mode_ = kModeCodecInternalCng;
+    // }
+    // if (!play_dtmf) {
+    //     dtmf_tone_generator_->Reset();
+    // }
+    expand_->Reset();
+    return 0;
+}
+
 
 int GetAudioInternal(AudioFrame* audio_frame, bool* muted)
 {
@@ -545,6 +779,7 @@ int GetAudioInternal(AudioFrame* audio_frame, bool* muted)
     }
 
     SpeechType speech_type;
+    bool play_dtmf = false;
     int length = 0;
 
     int decode_return_value = Decode(&packet_list, &operation, &length);
@@ -552,34 +787,34 @@ int GetAudioInternal(AudioFrame* audio_frame, bool* muted)
     algorithm_buffer_->Clear();
     switch (operation) {
         case kNormal: {
-            //DoNormal(decoded_buffer_.get(), length, speech_type, play_dtmf);
+            DoNormal(decoded_buffer_.get(), length, speech_type, play_dtmf);
             break;
         }
         case kMerge: {
-            //DoMerge(decoded_buffer_.get(), length, speech_type, play_dtmf);
+            DoMerge(decoded_buffer_.get(), length, speech_type, play_dtmf);
             break;
         }
         case kExpand: {
-            // RTC_DCHECK_EQ(return_value, 0);
+            RTC_DCHECK_EQ(return_value, 0);
             // if (!current_rtp_payload_type_ || !DoCodecPlc()) {
-            //     return_value = DoExpand(play_dtmf);
+                return_value = DoExpand(play_dtmf);
             // }
-            // RTC_DCHECK_GE(sync_buffer_->FutureLength() - expand_->overlap_length(),
-            //                 output_size_samples_);
+            RTC_DCHECK_GE(sync_buffer_->FutureLength() - expand_->overlap_length(),
+                            output_size_samples_);
             break;
         }
         case kAccelerate:
         case kFastAccelerate: {
-            // const bool fast_accelerate =
-            //     enable_fast_accelerate_ && (operation == kFastAccelerate);
-            // return_value = DoAccelerate(decoded_buffer_.get(), length, speech_type,
-            //                             play_dtmf, fast_accelerate);
+            const bool fast_accelerate =
+                enable_fast_accelerate_ && (operation == kFastAccelerate);
+            return_value = DoAccelerate(decoded_buffer_.get(), length, speech_type,
+                                        play_dtmf, fast_accelerate);
             break;
         }
         case kPreemptiveExpand: {
-            // return_value = DoPreemptiveExpand(decoded_buffer_.get(), length,
-            //                                     speech_type, play_dtmf);
-            // break;
+            return_value = DoPreemptiveExpand(decoded_buffer_.get(), length,
+                                                speech_type, play_dtmf);
+            break;
         }
         // case kRfc3389Cng:
         // case kRfc3389CngNoPacket: {
