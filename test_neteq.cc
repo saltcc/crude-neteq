@@ -748,6 +748,64 @@ int DoPreemptiveExpand(int16_t* decoded_buffer,
     return 0;
 }
 
+int DecodeLoop(PacketList* packet_list,
+                const Operations& operation,
+                int* decoded_length,
+                SpeechType* speech_type) {
+
+    // Do decoding.
+    while (!packet_list->empty()) {
+
+        assert(operation == kNormal || operation == kAccelerate ||
+            operation == kFastAccelerate || operation == kMerge ||
+            operation == kPreemptiveExpand);
+
+        memcpy(&decoded_buffer_[*decoded_length], packet_list->front().payload.data(), packet_list->front().payload.size());
+        *decoded_length += packet_list->front().payload.size();
+
+        decoder_frame_length_ = packet_list->front().payload.size();
+
+        packet_list->pop_front();
+        
+        if (*decoded_length > rtc::dchecked_cast<int>(decoded_buffer_length_)) {
+
+            packet_list->clear();
+            return kDecodedTooMuch;
+        }
+    }  // End of decode loop.
+
+  return 0;
+}
+
+int Decode(PacketList* packet_list,
+            Operations* operation,
+            int* decoded_length,
+            SpeechType* speech_type) {
+    *speech_type = kSpeech;
+
+    *decoded_length = 0;
+
+    int return_value;
+
+    return_value = DecodeLoop(packet_list, *operation, decoded_length,
+                              speech_type);
+
+    if (*decoded_length < 0) {
+        // Error returned from the decoder.
+        *decoded_length = 0;
+        sync_buffer_->IncreaseEndTimestamp(
+            static_cast<uint32_t>(decoder_frame_length_));
+
+        *operation = kExpand;  // Do expansion to get data instead.
+    }
+    if (*speech_type != kComfortNoise) {
+        sync_buffer_->IncreaseEndTimestamp(
+            *decoded_length / static_cast<int>(sync_buffer_->Channels()));
+    }
+
+    return return_value;
+}
+
 
 int GetAudioInternal(AudioFrame* audio_frame, bool* muted)
 {
