@@ -62,6 +62,7 @@ int fs_hz_ = 48000;
 size_t channels = 1;
 int fs_mult_ = fs_hz_ / 8000;
 int samples_10ms = static_cast<size_t>(10 * 8 * fs_mult_);
+int samples_20ms = samples_10ms * 2;
 int output_size_samples_ = static_cast<size_t>(kOutputSizeMs * 8 * fs_mult_);
 int decoder_frame_length_ = 2 * output_size_samples_;
 Modes last_mode_ = kModeNormal;
@@ -508,13 +509,6 @@ int GetDecision(Operations* operation, PacketList* packet_list)
     return 0;
 }
 
-int Decode(PacketList* packet_list,
-                      Operations* operation,
-                      int* decoded_length) 
-{
-    return decoder_frame_length_;
-}
-
 void DoNormal(const int16_t* decoded_buffer,
                 size_t decoded_length,
                 SpeechType speech_type,
@@ -840,7 +834,7 @@ int GetAudioInternal(AudioFrame* audio_frame, bool* muted)
     bool play_dtmf = false;
     int length = 0;
 
-    int decode_return_value = Decode(&packet_list, &operation, &length);
+    int decode_return_value = Decode(&packet_list, &operation, &length, &speech_type);
 
     algorithm_buffer_->Clear();
     switch (operation) {
@@ -984,38 +978,74 @@ int main(){
 
     init_eq();
 
-    const size_t kPayloadLength = 100;
     const uint8_t kPayloadType = 0;
-    const uint16_t kFirstSequenceNumber = 0x1234;
-    const uint32_t kFirstTimestamp = 0x12345678;
+    uint16_t kFirstSequenceNumber = 0;
+    uint32_t kFirstTimestamp = 0;
     const uint32_t kFirstReceiveTime = 17;
-    uint8_t payload[kPayloadLength] = {0};
 
-    RTPHeader rtp_header;
-    rtp_header.payloadType = kPayloadType;
-    rtp_header.sequenceNumber = kFirstSequenceNumber;
-    rtp_header.timestamp = kFirstTimestamp;
-
-    InsertPacket(rtp_header, payload, kFirstReceiveTime);
-    
-    for (int i = 1; i < 10000; ++i){
-        tick_timer_->Increment();
-
-        if (i % 5 == 0)
-        {
-            rtp_header.timestamp += 480;
-            rtp_header.sequenceNumber += 1;
-            InsertPacket(rtp_header, payload, kFirstReceiveTime);
-        }
-        if (i % 3 == 0)
-        {
-            rtp_header.timestamp += 480;
-            rtp_header.sequenceNumber += 1;
-            InsertPacket(rtp_header, payload, kFirstReceiveTime);
-        }
+    FILE *pcm = fopen("48.pcm", "rb");
+    FILE *outfile = fopen("plc.pcm", "wb");
+    if(pcm == NULL || outfile == NULL){
+        printf("open pcm or outfile file failed!\n");
+        return 0;
     }
-    delay_manager_->ShowHistogram();
-    printf("target level:%d\n",delay_manager_->TargetLevel()>>8);
+
+    int16_t buf[960];
+    int read;
+
+    while(!feof(pcm)){
+
+        read = fread(buf, sizeof(int16_t), samples_20ms, pcm);
+        if(read != samples_20ms){
+            printf("read: %d\n", read);
+            break;
+        }
+
+        RTPHeader rtp_header;
+        rtp_header.payloadType = kPayloadType;
+        rtp_header.sequenceNumber = kFirstSequenceNumber;
+        rtp_header.timestamp = kFirstTimestamp;
+
+        const uint8_t *payload = new uint8_t[1920];
+        InsertPacket(rtp_header, rtc::ArrayView<const uint8_t>(payload, 1920), kFirstReceiveTime);
+
+        AudioFrame frame;
+        bool muted = false;
+
+        GetAudioInternal(&frame, &muted);
+        if(frame.data()){
+            fwrite(frame.data(), sizeof(int16_t), frame.samples_per_channel_ * frame.num_channels_, outfile);
+        }
+
+        kFirstTimestamp += 960;
+        kFirstSequenceNumber++;
+    }
+
+    // RTPHeader rtp_header;
+    // rtp_header.payloadType = kPayloadType;
+    // rtp_header.sequenceNumber = kFirstSequenceNumber;
+    // rtp_header.timestamp = kFirstTimestamp;
+
+    // InsertPacket(rtp_header, payload, kFirstReceiveTime);
+    
+    // for (int i = 1; i < 10000; ++i){
+    //     tick_timer_->Increment();
+
+    //     if (i % 5 == 0)
+    //     {
+    //         rtp_header.timestamp += 480;
+    //         rtp_header.sequenceNumber += 1;
+    //         InsertPacket(rtp_header, payload, kFirstReceiveTime);
+    //     }
+    //     if (i % 3 == 0)
+    //     {
+    //         rtp_header.timestamp += 480;
+    //         rtp_header.sequenceNumber += 1;
+    //         InsertPacket(rtp_header, payload, kFirstReceiveTime);
+    //     }
+    // }
+    // delay_manager_->ShowHistogram();
+    // printf("target level:%d\n",delay_manager_->TargetLevel()>>8);
 
     return 0;
 }
