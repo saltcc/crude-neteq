@@ -762,11 +762,13 @@ int DecodeLoop(PacketList* packet_list,
         packet_list->pop_front();
         
         if (*decoded_length > rtc::dchecked_cast<int>(decoded_buffer_length_)) {
-
+            *decoded_length /= 2;
             packet_list->clear();
             return kDecodedTooMuch;
         }
     }  // End of decode loop.
+
+    *decoded_length /= 2;
 
   return 0;
 }
@@ -1006,12 +1008,18 @@ int main(){
         rtp_header.sequenceNumber = kFirstSequenceNumber;
         rtp_header.timestamp = kFirstTimestamp;
 
-        const uint8_t *payload = new uint8_t[1920];
+        uint8_t *payload = new uint8_t[1920];
+        memcpy(payload, buf, 1920);
         InsertPacket(rtp_header, rtc::ArrayView<const uint8_t>(payload, 1920), kFirstReceiveTime);
 
         AudioFrame frame;
         bool muted = false;
 
+        GetAudioInternal(&frame, &muted);
+        if(frame.data()){
+            fwrite(frame.data(), sizeof(int16_t), frame.samples_per_channel_ * frame.num_channels_, outfile);
+        }
+        frame.Reset();
         GetAudioInternal(&frame, &muted);
         if(frame.data()){
             fwrite(frame.data(), sizeof(int16_t), frame.samples_per_channel_ * frame.num_channels_, outfile);
