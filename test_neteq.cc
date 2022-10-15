@@ -71,7 +71,7 @@ Operations last_operation_;
 const bool enable_muted_state_ = true;
 const bool enable_fast_accelerate_ = true;
 bool new_codec_ = false;
-const bool no_time_stretching_ = true;
+const bool no_time_stretching_ = false;
 bool reset_decoder_ = false;
 
 void init_param(){
@@ -128,6 +128,13 @@ void init_eq()
     vad_->Init();
     vad_->Enable();
 
+    packet_buffer_.reset(new PacketBuffer(kMaxPacketsInBuffer));
+    decoded_buffer_.reset(new int16_t[decoded_buffer_length_]);
+    // Delete algorithm buffer and create a new one.
+    algorithm_buffer_.reset(new AudioMultiVector(channels));
+    // Delete sync buffer and create a new one.
+    sync_buffer_.reset(new SyncBuffer(channels, kSyncBufferSize * fs_mult_));
+
     // Delete BackgroundNoise object and create a new one.
     background_noise_.reset(new BackgroundNoise(channels));
 
@@ -153,12 +160,6 @@ void init_eq()
 
     buffer_level_filter_.reset(new BufferLevelFilter);
 
-    packet_buffer_.reset(new PacketBuffer(kMaxPacketsInBuffer));
-    decoded_buffer_.reset(new int16_t[decoded_buffer_length_]);
-    // Delete algorithm buffer and create a new one.
-    algorithm_buffer_.reset(new AudioMultiVector(channels));
-    // Delete sync buffer and create a new one.
-    sync_buffer_.reset(new SyncBuffer(channels, kSyncBufferSize * fs_mult_));
     // Move index so that we create a small set of future samples (all 0).
     sync_buffer_->set_next_index(sync_buffer_->next_index() -
                     expand_->overlap_length());
@@ -997,6 +998,8 @@ int main(){
 
     while(!feof(pcm)){
 
+        static int count = 0;
+        static int total = 0;
         read = fread(buf, sizeof(int16_t), samples_20ms, pcm);
         if(read != samples_20ms){
             printf("read: %d\n", read);
@@ -1010,7 +1013,30 @@ int main(){
 
         uint8_t *payload = new uint8_t[1920];
         memcpy(payload, buf, 1920);
-        InsertPacket(rtp_header, rtc::ArrayView<const uint8_t>(payload, 1920), kFirstReceiveTime);
+        InsertPacket(rtp_header, rtc::ArrayView<const uint8_t>(payload, 1920), kFirstReceiveTime);      
+        kFirstTimestamp += 960;
+        kFirstSequenceNumber++;
+        total++;
+        if (count++ % 2 == 0 && total <= 60){
+            
+            read = fread(buf, sizeof(int16_t), samples_20ms, pcm);
+            if(read != samples_20ms){
+                printf("read: %d\n", read);
+                break;
+            }
+            total++;
+
+            RTPHeader rtp_header;
+            rtp_header.payloadType = kPayloadType;
+            rtp_header.sequenceNumber = kFirstSequenceNumber;
+            rtp_header.timestamp = kFirstTimestamp;
+
+            uint8_t *payload = new uint8_t[1920];
+            memcpy(payload, buf, 1920);
+            InsertPacket(rtp_header, rtc::ArrayView<const uint8_t>(payload, 1920), kFirstReceiveTime);      
+            kFirstTimestamp += 960;
+            kFirstSequenceNumber++;
+        }
 
         AudioFrame frame;
         bool muted = false;
@@ -1024,9 +1050,6 @@ int main(){
         if(frame.data()){
             fwrite(frame.data(), sizeof(int16_t), frame.samples_per_channel_ * frame.num_channels_, outfile);
         }
-
-        kFirstTimestamp += 960;
-        kFirstSequenceNumber++;
     }
 
     // RTPHeader rtp_header;
