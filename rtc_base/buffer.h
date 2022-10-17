@@ -17,7 +17,7 @@
 #include <type_traits>
 #include <utility>
 
-#include "rtc_base/array_view.h"
+#include "neteq/array_view.h"
 #include "rtc_base/checks.h"
 #include "rtc_base/type_traits.h"
 #include "rtc_base/zero_memory.h"

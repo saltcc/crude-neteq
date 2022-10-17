@@ -13,7 +13,7 @@
 
 #include <string>  // size_t
 
-#include "rtc_base/audio_decoder.h"
+#include "neteq/audio_decoder.h"
 #include "common_audio/vad/include/webrtc_vad.h"
 //#include "common_types.h"  // NOLINT(build/include)  // NULL
 #include "neteq/defines.h"

@@ -11,7 +11,7 @@
 #ifndef MODULES_AUDIO_CODING_NETEQ_SYNC_BUFFER_H_
 #define MODULES_AUDIO_CODING_NETEQ_SYNC_BUFFER_H_
 
-#include "rtc_base/audio_frame.h"
+#include "neteq/audio_frame.h"
 #include "neteq/audio_multi_vector.h"
 #include "rtc_base/buffer.h"
 #include "rtc_base/constructormagic.h"

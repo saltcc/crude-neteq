@@ -12,10 +12,10 @@
 #include "neteq/audio_multi_vector.h"
 #include "neteq/crude_neteq.h"
 #include "neteq/random_vector.h"
-#include "rtc_base/audio_frame.h"
+#include "neteq/audio_frame.h"
 #include "neteq/optional.hpp"
 #include "neteq/packet.h"
-#include "rtc_base/audio_decoder.h"
+#include "neteq/audio_decoder.h"
 #include "rtc_base/constructormagic.h"
 
 namespace webrtc {

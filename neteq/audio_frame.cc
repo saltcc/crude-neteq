@@ -8,7 +8,7 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#include "rtc_base/audio_frame.h"
+#include "neteq/audio_frame.h"
 
 #include <string.h>
 

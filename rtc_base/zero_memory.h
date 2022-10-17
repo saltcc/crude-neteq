@@ -13,7 +13,7 @@
 
 #include <type_traits>
 
-#include "rtc_base/array_view.h"
+#include "neteq/array_view.h"
 
 namespace rtc {
 

@@ -8,7 +8,7 @@
 #include "neteq/background_noise.h"
 #include "neteq/random_vector.h"
 #include "neteq/post_decode_vad.h"
-#include "rtc_base/audio_frame.h"
+#include "neteq/audio_frame.h"
 #include "neteq/tick_timer.h"
 #include "neteq/accelerate.h"
 #include "neteq/buffer_level_filter.h"

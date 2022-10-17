@@ -15,7 +15,7 @@
 
 #include <vector>
 
-#include "rtc_base/array_view.h"
+#include "neteq/array_view.h"
 #include "neteq/audio_vector.h"
 #include "rtc_base/constructormagic.h"
 

@@ -14,7 +14,7 @@
 
 #include <algorithm>  // min
 
-#include "rtc_base/audio_decoder.h"
+#include "neteq/audio_decoder.h"
 #include "common_audio/signal_processing/include/signal_processing_library.h"
 #include "neteq/audio_multi_vector.h"
 #include "neteq/background_noise.h"
