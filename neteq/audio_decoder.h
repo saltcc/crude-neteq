@@ -13,9 +13,12 @@ namespace webrtc {
 
 class AudioDecoder {
 public:
+    AudioDecoder() = default;
+    virtual ~AudioDecoder() = default;
+
     enum SpeechType {
-      kSpeech = 1,
-      kComfortNoise = 2,
+        kSpeech = 1,
+        kComfortNoise = 2,
     };
 
     enum { kNotImplemented = -2 };
@@ -27,6 +30,10 @@ public:
                 int16_t* decoded,
                 SpeechType* speech_type);
     virtual int PacketDuration(const uint8_t* encoded, size_t encoded_len) const;
+
+    virtual void Reset() = 0;
+    virtual size_t Channels() const = 0;
+    virtual int SampleRateHz() const = 0;
 
 protected:
     virtual int DecodeInternal(const uint8_t* encoded,
