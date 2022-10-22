@@ -26,8 +26,8 @@ std::string CrudeNetEq::Config::ToString() const {
     return std::string("");
 }
 
-CrudeNetEq* CrudeNetEq::Create(const CrudeNetEq::Config& config) {
-    return new CrudeNetEqImpl(config);
+CrudeNetEq* CrudeNetEq::Create(const CrudeNetEq::Config& config, std::unique_ptr<AudioDecoder> &decoder) {
+    return new CrudeNetEqImpl(config, decoder);
 }
 
 }  // namespace webrtc

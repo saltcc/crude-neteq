@@ -9,6 +9,7 @@
 #include "rtc_base/constructormagic.h"
 #include "neteq/rtp_header.h"
 #include "neteq/array_view.h"
+#include "neteq/audio_decoder.h"
 
 namespace webrtc {
 
@@ -37,7 +38,7 @@ public:
     enum ReturnCodes { kOK = 0, kFail = -1 };
 
     static CrudeNetEq* Create(
-        const CrudeNetEq::Config& config);
+        const CrudeNetEq::Config& config, std::unique_ptr<AudioDecoder> &decoder);
 
     virtual ~CrudeNetEq() {}
 

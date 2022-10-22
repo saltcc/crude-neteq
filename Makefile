@@ -63,7 +63,7 @@ $(VADOBJS): %.o: %.c
 
 
 plctest: test_neteq.cc $(DSPLIB) $(VADLIB) $(BASELIB)
-	$(CXX) $< -o $@ -I. -L. -Lneteq -lplc -lwebrtc_vad -lbase -lsignal_processing -g -lpthread
+	$(CXX) $< -o $@ -I. -L. -Lneteq -Lcodec/interface -lplc -lwebrtc_vad -lbase -lsignal_processing -g -lpthread -lg711
 accetest: test_accelerate.cc $(DSPLIB) $(VADLIB) $(BASELIB)
 	$(CXX) $< -o $@ -I. -L. -Lneteq -lplc -lwebrtc_vad -lbase -lsignal_processing -g -lpthread
 #mutetest: test_mute.cc

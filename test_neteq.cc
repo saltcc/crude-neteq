@@ -21,6 +21,7 @@
 #include "neteq/optional.hpp"
 #include "neteq/rtp_header.h"
 #include "neteq/crude_neteq.h"
+#include "neteq/audio_decoder_pcm.h"
 
 
 using namespace webrtc;
@@ -39,7 +40,8 @@ void init()
     cfg.sample_rate_hz = 48000;
     cfg.max_delay_ms = 1000;
     cfg.enable_post_decode_vad = true;
-    neteq_ = CrudeNetEq::Create(cfg);
+    std::unique_ptr<AudioDecoder> decoder(new AudioDecoderPcmA(1));
+    neteq_ = CrudeNetEq::Create(cfg, decoder);
 }
 
 int main()

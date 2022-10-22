@@ -17,6 +17,7 @@
 #include "neteq/packet.h"
 #include "neteq/audio_decoder.h"
 #include "rtc_base/constructormagic.h"
+#include "neteq/audio_decoder.h"
 
 namespace webrtc {
 
@@ -69,7 +70,7 @@ public:
         kPacketBufferCorruption
     };
 
-    CrudeNetEqImpl(const CrudeNetEq::Config& config);
+    CrudeNetEqImpl(const CrudeNetEq::Config& config, std::unique_ptr<AudioDecoder> &decoder);
 
     ~CrudeNetEqImpl() override;
 
@@ -181,6 +182,8 @@ protected:
 
     std::unique_ptr<TickTimer::Stopwatch> generated_noise_stopwatch_;
     std::vector<uint32_t> last_decoded_timestamps_;
+
+    std::unique_ptr<AudioDecoder> decoder_;
 
 private:
     RTC_DISALLOW_COPY_AND_ASSIGN(CrudeNetEqImpl);

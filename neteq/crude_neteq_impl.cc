@@ -67,7 +67,7 @@ void SetAudioFrameActivityAndType(bool vad_enabled,
 }
 }
 
-CrudeNetEqImpl::CrudeNetEqImpl(const CrudeNetEq::Config& config):
+CrudeNetEqImpl::CrudeNetEqImpl(const CrudeNetEq::Config& config, std::unique_ptr<AudioDecoder> &decoder):
     tick_timer_(new TickTimer),
     buffer_level_filter_(new BufferLevelFilter),
     delay_peak_detector_(new DelayPeakDetector(tick_timer_.get())),
@@ -86,7 +86,8 @@ CrudeNetEqImpl::CrudeNetEqImpl(const CrudeNetEq::Config& config):
     ssrc_(0),
     first_packet_(true),
     enable_fast_accelerate_(config.enable_fast_accelerate),
-    enable_muted_state_(config.enable_muted_state)
+    enable_muted_state_(config.enable_muted_state),
+    decoder_(std::move(decoder))
 {
     int fs = config.sample_rate_hz;
     if (fs != 8000 && fs != 16000 && fs != 32000 && fs != 48000) {
