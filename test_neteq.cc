@@ -22,6 +22,7 @@
 #include "neteq/rtp_header.h"
 #include "neteq/crude_neteq.h"
 #include "neteq/audio_decoder_pcm.h"
+#include "codec/interface/g711/g711_interface.h"
 
 
 using namespace webrtc;
@@ -37,11 +38,20 @@ void init()
     cfg.max_packets_in_buffer = 100;
     cfg.enable_fast_accelerate = true;
     cfg.enable_muted_state = false;
-    cfg.sample_rate_hz = 48000;
+    cfg.sample_rate_hz = 8000;
     cfg.max_delay_ms = 1000;
     cfg.enable_post_decode_vad = true;
+
+    samples_10ms = 10 * 8 * cfg.sample_rate_hz / 8000;
+    samples_20ms = samples_10ms * 2;
+
     std::unique_ptr<AudioDecoder> decoder(new AudioDecoderPcmA(1));
     neteq_ = CrudeNetEq::Create(cfg, decoder);
+}
+
+size_t decode_pcm(const int16_t* speechIn, size_t len, uint8_t* encoded)
+{
+    return WebRtcG711_EncodeA(speechIn, len, encoded);
 }
 
 int main()
@@ -53,7 +63,7 @@ int main()
     uint32_t kFirstTimestamp = 0;
     const uint32_t kFirstReceiveTime = 17;
 
-    FILE *pcm = fopen("48.pcm", "rb");
+    FILE *pcm = fopen("8.pcm", "rb");
     FILE *outfile = fopen("plc.pcm", "wb");
     if(pcm == NULL || outfile == NULL){
         printf("open pcm or outfile file failed!\n");
@@ -78,11 +88,14 @@ int main()
         rtp_header.sequenceNumber = kFirstSequenceNumber;
         rtp_header.timestamp = kFirstTimestamp;
 
-        uint8_t *payload = new uint8_t[1920];
-        memcpy(payload, buf, 1920);
+        uint8_t speechIn[320] = {0};
+        memcpy(speechIn, buf, 320);
+        uint8_t *payload = new uint8_t[320];
+        size_t payloadlen = decode_pcm((const int16_t *)speechIn, 160, payload);
+        
         // InsertPacket(rtp_header, rtc::ArrayView<const uint8_t>(payload, 1920), kFirstReceiveTime);
-        neteq_->InsertPacket(rtp_header, rtc::ArrayView<const uint8_t>(payload, 1920), kFirstReceiveTime);
-        kFirstTimestamp += 960;
+        neteq_->InsertPacket(rtp_header, rtc::ArrayView<const uint8_t>(payload, payloadlen), kFirstReceiveTime);
+        kFirstTimestamp += 160;
         kFirstSequenceNumber++;
         total++;
         if (count++ % 2 == 0 && total <= 60){
@@ -99,11 +112,13 @@ int main()
             rtp_header.sequenceNumber = kFirstSequenceNumber;
             rtp_header.timestamp = kFirstTimestamp;
 
-            uint8_t *payload = new uint8_t[1920];
-            memcpy(payload, buf, 1920);
-            neteq_->InsertPacket(rtp_header, rtc::ArrayView<const uint8_t>(payload, 1920), kFirstReceiveTime);
+            uint8_t speechIn[320] = {0};
+            memcpy(speechIn, buf, 320);
+            uint8_t *payload = new uint8_t[320];
+            size_t payloadlen = decode_pcm((const int16_t *)speechIn, 160, payload);
+            neteq_->InsertPacket(rtp_header, rtc::ArrayView<const uint8_t>(payload, payloadlen), kFirstReceiveTime);
             // InsertPacket(rtp_header, rtc::ArrayView<const uint8_t>(payload, 1920), kFirstReceiveTime);      
-            kFirstTimestamp += 960;
+            kFirstTimestamp += 160;
             kFirstSequenceNumber++;
         }
 

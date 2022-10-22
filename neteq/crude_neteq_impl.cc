@@ -579,23 +579,22 @@ int CrudeNetEqImpl::DecodeLoop(PacketList* packet_list,
             operation == kFastAccelerate || operation == kMerge ||
             operation == kPreemptiveExpand);
 
-        memcpy(&decoded_buffer_[*decoded_length], packet_list->front().payload.data(), packet_list->front().payload.size());
-        *decoded_length += packet_list->front().payload.size();
+        *decoded_length += decoder_->Decode(packet_list->front().payload.data(), 
+                                            packet_list->front().payload.size(), 
+                                            fs_hz_, decoder_frame_length_, 
+                                            (int16_t *)&decoded_buffer_[*decoded_length], speech_type);
 
         decoder_frame_length_ = packet_list->front().payload.size();
 
         packet_list->pop_front();
         
         if (*decoded_length > rtc::dchecked_cast<int>(decoded_buffer_length_)) {
-            *decoded_length /= 2;
             packet_list->clear();
             return kDecodedTooMuch;
         }
     }
-
-    *decoded_length /= 2;
-
-  return 0;
+    
+    return 0;
 }
 
 void CrudeNetEqImpl::DoNormal(const int16_t* decoded_buffer,
