@@ -1,12 +1,11 @@
 CC = gcc
 CXX = g++ -std=c++11
 CFLAGS = -fno-exceptions -fvisibility=hidden -DNDEBUG -DWEBRTC_POSIX -g
-#CFLAGS = -DNDEBUG -DWEBRTC_POSIX -g
 INC = -I.
 
 .PHONY: libs
-#libs:neteq dsp base vad
-libs:dsp base vad
+libs:dsp base vad neteq codec
+# libs:dsp base vad
 
 DSPSRC = $(wildcard common_audio/signal_processing/*.c)
 DSPSRC += common_audio/third_party/spl_sqrt_floor/spl_sqrt_floor.c
@@ -27,18 +26,6 @@ SCALEOBJ = common_audio/signal_processing/dot_product_with_scale.o
 dsp: $(DSPLIB)
 base: $(BASELIB)
 vad: $(VADLIB)
-
-APP_PLC=plctest
-APP_ACCE=accetest
-APP_MUTE=mutetest
-APP_COPY=copytest
-APP_NOISE=noisetest
-
-plc:  $(APP_PLC)
-acce: $(APP_ACCE)
-#mute: $(APP_MUTE)
-#copy: $(APP_COPY)
-noise:$(APP_NOISE)
 
 $(DSPLIB): $(DSPOBJS) $(SCALEOBJ)
 	ar cr $@ $^
@@ -61,27 +48,24 @@ $(BASEOBJS): %.o: %.cc
 $(VADOBJS): %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@ $(INC)
 
+neteq: neteqlibs
+neteqlibs:
+	$(MAKE) -C ./neteq/
 
-plctest: test_neteq.cc $(DSPLIB) $(VADLIB) $(BASELIB)
-	$(CXX) $< -o $@ -I. -L. -Lneteq -Lcodec/interface -lplc -lwebrtc_vad -lbase -lsignal_processing -g -lpthread -lg711
-accetest: test_accelerate.cc $(DSPLIB) $(VADLIB) $(BASELIB)
-	$(CXX) $< -o $@ -I. -L. -Lneteq -lplc -lwebrtc_vad -lbase -lsignal_processing -g -lpthread
-#mutetest: test_mute.cc
-#	$(CXX) $(CFLAGS) $< -o $@ -I. -L. -Lneteq -lplc -lwebrtc_vad -lbase -lsignal_processing -g -lpthread
-#copytest: test_copy.cc
-#	$(CXX) $(CFLAGS) $< -o $@ $(INC) -I. -L. -Lneteq -lplc -lwebrtc_vad -lbase -lsignal_processing -g -lpthread
-noisetest: test_noise.cc
-	$(CXX) $(CFLAGS) $< -o $@ $(INC) -L. -Lneteq -lplc -lwebrtc_vad -lbase -lsignal_processing -lpthread
+codec:codeclibs
+codeclibs:
+	$(MAKE) -C ./codec/interface/
 
-#NETEQ=
-#neteq:$NETEQ
-#$NETEQ:
-#	$(MAKE) -C ./neteq/
+.PHONY: clear
+clear:curclear codecclear neteqclear
 
-app:$(APP_PLC) $(APP_ACCE) $(APP_NOISE)
-	
-.PHONY: clean
+curclear:
+	-rm $(DSPOBJS) $(DSPLIB) $(VADOBJS) $(VADLIB) $(BASEOBJS) $(BASELIB) $(DYLIBS) $(SCALEOBJ)
+codecclear:
+	cd ./codec/interface && $(MAKE) clean
+neteqclear:
+	cd ./neteq && $(MAKE) clean
 
-clean:
-	-rm $(DSPOBJS) $(DSPLIB) $(VADOBJS) $(VADLIB) $(BASEOBJS) $(BASELIB) $(DYLIBS) $(SCALEOBJ) \
-	$(APP_PLC) $(APP_ACCE) $(APP_NOISE)
+.PHONY: example
+example:
+	cd ./example && $(MAKE)
